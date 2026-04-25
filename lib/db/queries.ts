@@ -1,10 +1,14 @@
 import 'server-only';
 
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+
+import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
 
 import { domains, mailboxes, messages, threads } from '@/db/schema';
 
 import { getDb } from './client';
+
+const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
 export type MailboxWithDomain = {
   id: string;
@@ -190,4 +194,91 @@ export async function markThreadRead(threadId: string): Promise<{ updated: numbe
     tx.update(threads).set({ unreadCount: sql`0` }).where(eq(threads.id, threadId)).run();
     return { updated: result.changes ?? 0 };
   });
+}
+
+export type DomainRow = {
+  id: string;
+  domain: string;
+  verifiedAt: number | null;
+  createdAt: number;
+  mailboxCount: number;
+};
+
+export async function listDomains(): Promise<DomainRow[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: domains.id,
+      domain: domains.domain,
+      verifiedAt: domains.verifiedAt,
+      createdAt: domains.createdAt,
+      mailboxCount: count(mailboxes.id),
+    })
+    .from(domains)
+    .leftJoin(mailboxes, eq(mailboxes.domainId, domains.id))
+    .groupBy(domains.id)
+    .orderBy(asc(domains.domain));
+  return rows.map((r) => ({
+    id: r.id,
+    domain: r.domain,
+    verifiedAt: r.verifiedAt?.getTime() ?? null,
+    createdAt: r.createdAt.getTime(),
+    mailboxCount: Number(r.mailboxCount ?? 0),
+  }));
+}
+
+export type AddDomainResult =
+  | { ok: true; domainId: string; mailboxId: string }
+  | { ok: false; reason: 'invalid' | 'duplicate' };
+
+export async function addDomain(input: string): Promise<AddDomainResult> {
+  const normalized = input.trim().toLowerCase();
+  // RFC 1035: full domain max 253 chars. Length-gate before regex to bound work.
+  if (normalized.length === 0 || normalized.length > 253) return { ok: false, reason: 'invalid' };
+  if (!DOMAIN_REGEX.test(normalized)) return { ok: false, reason: 'invalid' };
+
+  const db = getDb();
+  try {
+    return db.transaction((tx) => {
+      const existing = tx
+        .select({ id: domains.id })
+        .from(domains)
+        .where(eq(domains.domain, normalized))
+        .all();
+      if (existing.length > 0) return { ok: false, reason: 'duplicate' as const };
+
+      const domainId = randomUUID();
+      const mailboxId = randomUUID();
+      tx.insert(domains)
+        .values({
+          id: domainId,
+          domain: normalized,
+          verifiedAt: null,
+          dkimStatus: 'pending',
+        })
+        .run();
+      tx.insert(mailboxes)
+        .values({
+          id: mailboxId,
+          domainId,
+          localPart: 'hello',
+          displayName: normalized,
+        })
+        .run();
+      return { ok: true as const, domainId, mailboxId };
+    });
+  } catch (err) {
+    // Race fallback: concurrent submits can both pass the existence check, then
+    // the second insert trips the domains_domain_idx UNIQUE constraint.
+    if (isUniqueConstraintError(err)) return { ok: false, reason: 'duplicate' };
+    throw err;
+  }
+}
+
+function isUniqueConstraintError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    'code' in err &&
+    (err as { code?: unknown }).code === 'SQLITE_CONSTRAINT_UNIQUE'
+  );
 }

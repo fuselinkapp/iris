@@ -19,14 +19,13 @@ export function Sidebar() {
         <p className="px-2 pb-1 text-[0.7rem] uppercase tracking-wider text-[var(--text-muted)]">
           Mailboxes
         </p>
-        <button
-          type="button"
-          disabled
-          className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-[var(--text-muted)] disabled:cursor-not-allowed"
+        <Link
+          href="/settings/domains?add=1"
+          className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text)]"
         >
           <Plus className="size-4" />
           Add domain
-        </button>
+        </Link>
       </div>
 
       <div className="mt-auto flex items-center justify-between border-t border-[var(--border-subtle)] pt-3">

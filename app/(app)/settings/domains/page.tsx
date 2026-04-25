@@ -1,10 +1,13 @@
-import { SettingsPanel } from '@/components/settings-panel';
+import { DomainsList } from '@/components/domains-list';
+import { listDomains } from '@/lib/db/queries';
 
-export default function DomainsSettingsPage() {
-  return (
-    <SettingsPanel
-      title="Domains"
-      description="Add a domain you own. Iris will give you the DNS records to paste, then start receiving mail at hello@yourthing.com."
-    />
-  );
+export const dynamic = 'force-dynamic';
+
+export default async function DomainsSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ add?: string }>;
+}) {
+  const [domains, params] = await Promise.all([listDomains(), searchParams]);
+  return <DomainsList initialDomains={domains} autoOpenForm={params.add === '1'} />;
 }
