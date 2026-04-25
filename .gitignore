@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+.vercel
+.wrangler
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.biome
+coverage
+dist
+tsconfig.tsbuildinfo

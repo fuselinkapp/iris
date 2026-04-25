@@ -1,0 +1,5 @@
+import { TodayView } from '@/components/today-view';
+
+export default function HomePage() {
+  return <TodayView />;
+}
