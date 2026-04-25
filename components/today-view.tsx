@@ -1,10 +1,11 @@
 'use client';
 
 import { CommandBar } from '@/components/command-bar';
-import { type Mode, useMode } from '@/lib/mode-store';
+import { GrandmaView } from '@/components/grandma-view';
+import { useMode } from '@/lib/mode-store';
 import { useMounted } from '@/lib/use-mounted';
 
-const COPY: Record<Mode, { title: string; sub: string }> = {
+const COPY = {
   focus: {
     title: 'Nothing needs you right now.',
     sub: "You're caught up. Iris will surface things here when they matter.",
@@ -13,16 +14,18 @@ const COPY: Record<Mode, { title: string; sub: string }> = {
     title: 'Inbox zero, inbox calm.',
     sub: 'When mail arrives, Iris will queue suggested actions here.',
   },
-  grandma: {
-    title: 'No mailboxes connected yet.',
-    sub: 'Add a domain to see your mail the classic way.',
-  },
-};
+} as const;
 
 export function TodayView() {
   const mounted = useMounted();
   const mode = useMode();
-  const { title, sub } = COPY[mounted ? mode : 'focus'];
+  const effective = mounted ? mode : 'focus';
+
+  if (effective === 'grandma') {
+    return <GrandmaView />;
+  }
+
+  const { title, sub } = COPY[effective];
 
   return (
     <section className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center gap-8 px-6">

@@ -12,3 +12,4 @@ out
 coverage
 dist
 tsconfig.tsbuildinfo
+.iris/

@@ -18,9 +18,20 @@ Add a domain, paste two DNS records, and `hello@yourthing.com` shows up in Iris 
 
 ## Status
 
-**Day 0.** Spec only — no code yet. See [`SPEC.md`](./SPEC.md) for the full design.
+Early. The shell, the schema, and a Grandma-mode mailbox view are in. No real mail flowing yet. See [`SPEC.md`](./SPEC.md) for the full design and `docs/phase-*.md` for what each phase shipped.
 
 If you want to help shape v0, open an issue or grab one from the [issues tab](https://github.com/fuselinkapp/iris/issues).
+
+## Local development
+
+```bash
+pnpm install
+pnpm db:migrate   # creates .iris/iris.db with the v0 schema
+pnpm db:seed      # 18 fake threads across 3 mailboxes on 2 domains
+pnpm dev
+```
+
+Then open <http://localhost:3000>, flip the Mode dial in the sidebar to **Grandma**, and you'll see the seeded threads.
 
 ## License
 
