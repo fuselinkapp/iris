@@ -1,8 +1,8 @@
 import 'server-only';
 
-import { desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 
-import { domains, mailboxes, threads } from '@/db/schema';
+import { domains, mailboxes, messages, threads } from '@/db/schema';
 
 import { getDb } from './client';
 
@@ -107,5 +107,87 @@ export async function listThreads(mailboxId: string | 'all'): Promise<ThreadRow[
       lastMessageAt: thread.lastMessageAt.getTime(),
       unreadCount: thread.unreadCount,
     };
+  });
+}
+
+export type ThreadHeader = {
+  id: string;
+  mailboxId: string;
+  mailboxAddress: string;
+  subject: string;
+  lastMessageAt: number;
+};
+
+export type MessageRow = {
+  id: string;
+  fromAddress: string;
+  fromName: string | null;
+  toAddresses: string[];
+  text: string | null;
+  receivedAt: number;
+  readAt: number | null;
+};
+
+export type ThreadDetail = {
+  thread: ThreadHeader;
+  messages: MessageRow[];
+};
+
+function parseAddresses(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getThreadDetail(threadId: string): Promise<ThreadDetail | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({ thread: threads, mailbox: mailboxes, domain: domains })
+    .from(threads)
+    .innerJoin(mailboxes, eq(threads.mailboxId, mailboxes.id))
+    .innerJoin(domains, eq(mailboxes.domainId, domains.id))
+    .where(eq(threads.id, threadId))
+    .limit(1);
+  if (!row) return null;
+
+  const msgs = await db
+    .select()
+    .from(messages)
+    .where(eq(messages.threadId, threadId))
+    .orderBy(asc(messages.receivedAt));
+
+  return {
+    thread: {
+      id: row.thread.id,
+      mailboxId: row.thread.mailboxId,
+      mailboxAddress: `${row.mailbox.localPart}@${row.domain.domain}`,
+      subject: row.thread.subject,
+      lastMessageAt: row.thread.lastMessageAt.getTime(),
+    },
+    messages: msgs.map((m) => ({
+      id: m.id,
+      fromAddress: m.fromAddress,
+      fromName: m.fromName,
+      toAddresses: parseAddresses(m.toAddresses),
+      text: m.text,
+      receivedAt: m.receivedAt.getTime(),
+      readAt: m.readAt?.getTime() ?? null,
+    })),
+  };
+}
+
+export async function markThreadRead(threadId: string): Promise<{ updated: number }> {
+  const db = getDb();
+  return db.transaction((tx) => {
+    const result = tx
+      .update(messages)
+      .set({ readAt: new Date() })
+      .where(and(eq(messages.threadId, threadId), isNull(messages.readAt)))
+      .run();
+    tx.update(threads).set({ unreadCount: sql`0` }).where(eq(threads.id, threadId)).run();
+    return { updated: result.changes ?? 0 };
   });
 }

@@ -1,28 +1,35 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 
 import { type GrandmaData, getGrandmaData } from '@/app/actions/grandma';
+import { ReaderPane } from '@/components/reader-pane';
 import { cn } from '@/lib/cn';
 import { formatRelative } from '@/lib/format-relative';
 
 export function GrandmaView() {
   const router = useRouter();
   const params = useSearchParams();
-  const selected = params.get('mailbox');
+  const selectedMailbox = params.get('mailbox');
+  const selectedThread = params.get('thread');
   const [data, setData] = useState<GrandmaData | null>(null);
   const [, startTransition] = useTransition();
 
+  const refetch = useCallback(async () => {
+    const next = await getGrandmaData(selectedMailbox);
+    setData(next);
+  }, [selectedMailbox]);
+
   useEffect(() => {
     let cancelled = false;
-    getGrandmaData(selected).then((next) => {
+    getGrandmaData(selectedMailbox).then((next) => {
       if (!cancelled) setData(next);
     });
     return () => {
       cancelled = true;
     };
-  }, [selected]);
+  }, [selectedMailbox]);
 
   const grouped = useMemo(() => {
     if (!data) return [];
@@ -35,14 +42,30 @@ export function GrandmaView() {
     return [...byDomain.entries()].map(([domain, mailboxes]) => ({ domain, mailboxes }));
   }, [data]);
 
+  const updateQuery = useCallback(
+    (next: URLSearchParams) => {
+      startTransition(() => {
+        const qs = next.toString();
+        router.replace(qs ? `/?${qs}` : '/', { scroll: false });
+      });
+    },
+    [router],
+  );
+
   function selectMailbox(id: string | null) {
-    startTransition(() => {
-      const next = new URLSearchParams(params.toString());
-      if (id) next.set('mailbox', id);
-      else next.delete('mailbox');
-      const qs = next.toString();
-      router.replace(qs ? `/?${qs}` : '/', { scroll: false });
-    });
+    const next = new URLSearchParams(params.toString());
+    if (id) next.set('mailbox', id);
+    else next.delete('mailbox');
+    next.delete('thread');
+    updateQuery(next);
+  }
+
+  function selectThread(id: string | null) {
+    if (id === selectedThread) return;
+    const next = new URLSearchParams(params.toString());
+    if (id) next.set('thread', id);
+    else next.delete('thread');
+    updateQuery(next);
   }
 
   if (!data) {
@@ -61,14 +84,19 @@ export function GrandmaView() {
     );
   }
 
+  const selectedThreadRow = selectedThread
+    ? (data.threads.find((t) => t.id === selectedThread) ?? null)
+    : null;
+  const hasUnread = (selectedThreadRow?.unreadCount ?? 0) > 0;
+
   return (
-    <div className="grid h-full grid-cols-[260px_1fr]">
+    <div className="grid h-full grid-cols-[260px_360px_1fr]">
       <nav className="flex flex-col gap-3 overflow-y-auto border-r border-[var(--border-subtle)] px-3 py-5">
         <MailboxButton
           label="All inboxes"
           subtitle={`${data.threads.length} thread${data.threads.length === 1 ? '' : 's'}`}
           unread={data.mailboxes.reduce((acc, m) => acc + m.unreadCount, 0)}
-          active={selected === null}
+          active={selectedMailbox === null}
           onClick={() => selectMailbox(null)}
         />
         {grouped.map(({ domain, mailboxes }) => (
@@ -82,7 +110,7 @@ export function GrandmaView() {
                 label={m.localPart}
                 subtitle={m.address}
                 unread={m.unreadCount}
-                active={selected === m.id}
+                active={selectedMailbox === m.id}
                 onClick={() => selectMailbox(m.id)}
               />
             ))}
@@ -90,42 +118,60 @@ export function GrandmaView() {
         ))}
       </nav>
 
-      <ol className="overflow-y-auto">
+      <ol className="overflow-y-auto border-r border-[var(--border-subtle)]">
         {data.threads.length === 0 ? (
           <li className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
             No threads in this mailbox yet.
           </li>
         ) : (
-          data.threads.map((t) => (
-            <li
-              key={t.id}
-              className="group flex cursor-default items-baseline gap-4 border-b border-[var(--border-subtle)] px-6 py-3.5 transition-colors hover:bg-[var(--surface-elevated)]"
-            >
-              <div className="w-44 shrink-0 truncate text-sm">
-                <span
-                  className={cn(t.unreadCount > 0 ? 'font-medium' : 'text-[var(--text-muted)]')}
-                >
-                  {t.fromName ?? t.fromAddress}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p
+          data.threads.map((t) => {
+            const isActive = t.id === selectedThread;
+            return (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onClick={() => selectThread(t.id)}
                   className={cn(
-                    'truncate text-sm',
-                    t.unreadCount > 0 ? 'font-medium' : 'text-[var(--text-muted)]',
+                    'flex w-full items-baseline gap-4 border-b border-[var(--border-subtle)] px-5 py-3.5 text-left transition-colors',
+                    isActive
+                      ? 'bg-[var(--surface-elevated)]'
+                      : 'hover:bg-[var(--surface-elevated)]/60',
                   )}
                 >
-                  {t.subject}
-                </p>
-                <p className="truncate text-xs text-[var(--text-muted)]">{t.snippet}</p>
-              </div>
-              <div className="w-16 shrink-0 text-right text-xs text-[var(--text-muted)]">
-                {formatRelative(t.lastMessageAt)}
-              </div>
-            </li>
-          ))
+                  <div className="w-32 shrink-0 truncate text-sm">
+                    <span
+                      className={cn(t.unreadCount > 0 ? 'font-medium' : 'text-[var(--text-muted)]')}
+                    >
+                      {t.fromName ?? t.fromAddress}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={cn(
+                        'truncate text-sm',
+                        t.unreadCount > 0 ? 'font-medium' : 'text-[var(--text-muted)]',
+                      )}
+                    >
+                      {t.subject}
+                    </p>
+                    <p className="truncate text-xs text-[var(--text-muted)]">{t.snippet}</p>
+                  </div>
+                  <div className="w-12 shrink-0 text-right text-xs text-[var(--text-muted)]">
+                    {formatRelative(t.lastMessageAt)}
+                  </div>
+                </button>
+              </li>
+            );
+          })
         )}
       </ol>
+
+      <ReaderPane
+        threadId={selectedThread}
+        hasUnread={hasUnread}
+        onClose={() => selectThread(null)}
+        onMarkedRead={refetch}
+      />
     </div>
   );
 }
