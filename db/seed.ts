@@ -272,13 +272,14 @@ const seedTx = sqlite.transaction(() => {
     mboxByAddress.set(`${m.localPart}@${domain}`, m.id);
   }
 
-  for (const seed of SEEDS) {
+  for (const [seedIndex, seed] of SEEDS.entries()) {
     const mailboxId = mboxByAddress.get(seed.mailbox);
     if (!mailboxId) throw new Error(`Unknown seed mailbox: ${seed.mailbox}`);
 
     const threadId = randomUUID();
     const messageId = randomUUID();
     const unread = seed.read ? 0 : 1;
+    const headerMessageId = `<seed-${seedIndex.toString().padStart(2, '0')}@iris.local>`;
 
     db.insert(schema.threads)
       .values({
@@ -301,6 +302,7 @@ const seedTx = sqlite.transaction(() => {
         toAddresses: JSON.stringify([seed.mailbox]),
         subject: seed.subject,
         text: seed.body,
+        headers: JSON.stringify({ 'message-id': headerMessageId }),
         receivedAt: new Date(seed.receivedAt),
         readAt: seed.read ? new Date(seed.receivedAt) : null,
       })

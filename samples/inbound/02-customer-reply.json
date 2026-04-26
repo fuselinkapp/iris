@@ -1,0 +1,9 @@
+{
+  "from": { "name": "Maya Chen", "address": "maya@hellomaya.co" },
+  "to": ["hello@catnap.dev"],
+  "subject": "Re: Re: pricing question",
+  "text": "One more thing — can we get the priority support tier comp'd for the first quarter? Happy to write a testimonial in exchange.",
+  "headers": { "message-id": "<reply-from-maya-2@hellomaya.co>" },
+  "inReplyTo": "<seed-02@iris.local>",
+  "references": ["<seed-02@iris.local>"]
+}

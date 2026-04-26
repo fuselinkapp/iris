@@ -1,0 +1,7 @@
+{
+  "from": { "name": "Vercel", "address": "no-reply@vercel.com" },
+  "to": ["hello@catnap.dev"],
+  "subject": "Re: ✓ Production deploy succeeded — catnap.dev",
+  "text": "Your latest deployment is live at https://catnap.dev (build #483, 1.8s). Triggered by oz on commit ab12cd3.",
+  "headers": { "message-id": "<deploy-483@notify.vercel.com>" }
+}

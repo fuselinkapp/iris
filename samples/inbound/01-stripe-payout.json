@@ -1,0 +1,8 @@
+{
+  "from": { "name": "Stripe", "address": "updates@stripe.com" },
+  "to": ["hello@catnap.dev"],
+  "subject": "Your weekly payout of $2,104.00 is on its way",
+  "text": "We've initiated a transfer of $2,104.00 to your bank account ending in 4242. Funds typically arrive within 2 business days.",
+  "html": "<p>We've initiated a transfer of <strong>$2,104.00</strong> to your bank account ending in 4242.</p><p>Funds typically arrive within 2 business days.</p>",
+  "headers": { "message-id": "<payout-w47-2104@mail.stripe.com>" }
+}

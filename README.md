@@ -33,6 +33,23 @@ pnpm dev
 
 Then open <http://localhost:3000>, flip the Mode dial in the sidebar to **Grandma**, and you'll see the seeded threads.
 
+## Trying out inbound
+
+The `/api/ingest` endpoint accepts pre-parsed messages, so you can exercise the inbound pipeline without a Cloudflare Worker yet. The Worker phase (0.6) will call this same endpoint with the same payload shape.
+
+```bash
+# (Optional) set a token to require auth in dev; otherwise dev mode bypasses it
+echo 'IRIS_INGEST_TOKEN=dev' >> .env.local
+
+# Fire a sample at the running dev server
+curl -X POST http://localhost:3000/api/ingest \
+  -H "Content-Type: application/json" \
+  -H "x-iris-ingest-token: dev" \
+  -d @samples/inbound/01-stripe-payout.json
+```
+
+Then refresh the Grandma view to see it land. Other samples in `samples/inbound/` exercise threading via `In-Reply-To`, the **Pending → Verified** flip on first inbound to a new domain, and subject-fallback grouping for transactional mail without threading headers.
+
 ## License
 
 MIT — see [`LICENSE`](./LICENSE).

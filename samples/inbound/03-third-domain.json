@@ -1,0 +1,7 @@
+{
+  "from": { "name": "GitHub", "address": "noreply@github.com" },
+  "to": ["hello@notebook.fyi"],
+  "subject": "[notebook/web] Welcome to GitHub Sponsors",
+  "text": "You've been added as a sponsor for the notebook/web repository. Manage your sponsorship anytime from the dashboard.",
+  "headers": { "message-id": "<sponsor-welcome-1@github.com>" }
+}
