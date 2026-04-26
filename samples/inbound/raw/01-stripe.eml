@@ -1,0 +1,38 @@
+Return-Path: <bounce+stripe@notify.stripe.com>
+Received: from mx-prod-1.stripe.com ([13.249.16.42])
+	by relay.cloudflare.com with ESMTPS id abc123;
+	Sat, 26 Apr 2026 09:14:22 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=stripe.com;
+	s=mx-prod-1; t=1745659762;
+	bh=W12oRuQ8jJ6ZuTU3Y2u/Bj6cN4gKgQfX4lKxpYxq5Js=
+From: "Stripe" <updates@stripe.com>
+To: hello@catnap.dev
+Subject: Your weekly payout of $3,217.40 is on its way
+Date: Sat, 26 Apr 2026 09:14:22 +0000
+Message-ID: <payout-week17-3217@notify.stripe.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="iris-test-boundary"
+
+--iris-test-boundary
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Hi there,
+
+We've initiated a transfer of $3,217.40 to your bank account ending in
+4242. Funds typically arrive within 2 business days.
+
+— The Stripe team
+
+--iris-test-boundary
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+<html><body>
+<p>Hi there,</p>
+<p>We've initiated a transfer of <strong>$3,217.40</strong> to your bank
+account ending in 4242. Funds typically arrive within 2 business days.</p>
+<p>&mdash; The Stripe team</p>
+</body></html>
+
+--iris-test-boundary--

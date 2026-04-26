@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { getDb } from '@/lib/db/client';
 import { type IngestPayload, type IngestResult, ingestMessage } from '@/lib/email/ingest';
 
 export const runtime = 'nodejs';
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
 
   let result: IngestResult;
   try {
-    result = await ingestMessage(body);
+    result = await ingestMessage(body, getDb());
   } catch (err) {
     console.error('[iris] /api/ingest internal error:', err);
     return NextResponse.json({ error: 'internal' }, { status: 500 });

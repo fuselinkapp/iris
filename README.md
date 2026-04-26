@@ -50,6 +50,17 @@ curl -X POST http://localhost:3000/api/ingest \
 
 Then refresh the Grandma view to see it land. Other samples in `samples/inbound/` exercise threading via `In-Reply-To`, the **Pending → Verified** flip on first inbound to a new domain, and subject-fallback grouping for transactional mail without threading headers.
 
+To exercise the **Cloudflare Email Worker** locally without spinning up wrangler — same parser, same `ingestMessage` function the deployed Worker uses, just writing to `.iris/iris.db` instead of D1:
+
+```bash
+pnpm worker:test                                       # default sample
+pnpm worker:test samples/inbound/raw/01-stripe.eml     # explicit path
+```
+
+## Production deploy
+
+See [`DEPLOY.md`](./DEPLOY.md) for the Cloudflare walkthrough — Worker, D1, R2, and Email Routing wiring.
+
 ## License
 
 MIT — see [`LICENSE`](./LICENSE).

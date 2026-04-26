@@ -1,11 +1,13 @@
-import 'server-only';
-
-import { randomUUID } from 'node:crypto';
+// Runtime-agnostic: callable from the Next.js Node route handler with a
+// better-sqlite3 client, or from the Cloudflare Email Worker with a D1 client.
+// Uses only globals available in both runtimes (Web Crypto for randomUUID).
 
 import { and, eq, gte, sql } from 'drizzle-orm';
 
 import { contacts, domains, mailboxes, messages, threads } from '@/db/schema';
-import { getDb } from '@/lib/db/client';
+import type { IrisDb } from '@/lib/db/types';
+
+const randomUUID = () => crypto.randomUUID();
 
 export type IngestPayload = {
   from?: { name?: string; address: string };
@@ -120,13 +122,12 @@ function ensureMessageId(headers: Record<string, string>): string {
   return lowerHeaderLookup(headers, 'message-id') ?? `<${randomUUID()}@iris.local>`;
 }
 
-export async function ingestMessage(payload: IngestPayload): Promise<IngestResult> {
+export async function ingestMessage(payload: IngestPayload, db: IrisDb): Promise<IngestResult> {
   const validation = validatePayload(payload);
   if (!validation.ok) return { ok: false, reason: 'invalid_payload', detail: validation.detail };
   const p = validation.value;
 
   const candidates = [...p.to, ...p.cc];
-  const db = getDb();
 
   // Resolve mailbox before opening the transaction — read-only, no need to lock.
   let recipient: { mailboxId: string; domainId: string; verifiedAt: Date | null } | null = null;
@@ -161,114 +162,117 @@ export async function ingestMessage(payload: IngestPayload): Promise<IngestResul
   const snippet = deriveSnippet(p.text, p.html, p.subject);
   const receivedAtDate = new Date(p.receivedAt);
 
-  // better-sqlite3 transactions are SYNCHRONOUS. Do not introduce `await` inside
-  // this callback — better-sqlite3 commits on synchronous return, so an awaited
-  // operation would execute *after* commit and break atomicity. If a future
-  // change needs async work, do it before/after the transaction, not inside.
-  return db.transaction((tx) => {
-    let threadId: string | null = null;
+  // We deliberately do NOT use db.transaction() here: better-sqlite3 has a sync
+  // transaction, D1 has no interactive transaction at all, and the union type
+  // can't satisfy both signatures. The writes are ordered so a partial failure
+  // leaves a recoverable state — at worst, an empty thread row.
+  let threadId: string | null = null;
 
-    // Header-based threading: look for any existing message in this mailbox
-    // whose stored Message-ID matches one of our In-Reply-To / References
-    // values. SQLite's json_extract reads the value out of the JSON-stringified
-    // headers column. Use sql.join to safely parameterize the IN list.
-    if (candidateRefs.length > 0) {
-      const refsList = sql.join(
-        candidateRefs.map((r) => sql`${r}`),
-        sql`, `,
-      );
-      const headerHits = tx.all(
-        sql`SELECT m.thread_id AS thread_id
-            FROM messages m
-            INNER JOIN threads t ON t.id = m.thread_id
-            WHERE t.mailbox_id = ${recipient.mailboxId}
-              AND json_extract(m.headers, '$."message-id"') IN (${refsList})
-            LIMIT 1`,
-      ) as Array<{ thread_id: string }>;
-      if (headerHits[0]?.thread_id) threadId = headerHits[0].thread_id;
-    }
+  // Header-based threading: look for any existing message in this mailbox
+  // whose stored Message-ID matches one of our In-Reply-To / References
+  // values. SQLite's json_extract reads the value out of the JSON-stringified
+  // headers column. sql.join safely parameterizes the IN list.
+  if (candidateRefs.length > 0) {
+    const refsList = sql.join(
+      candidateRefs.map((r) => sql`${r}`),
+      sql`, `,
+    );
+    const headerHits = (await db.all(
+      sql`SELECT m.thread_id AS thread_id
+          FROM messages m
+          INNER JOIN threads t ON t.id = m.thread_id
+          WHERE t.mailbox_id = ${recipient.mailboxId}
+            AND json_extract(m.headers, '$."message-id"') IN (${refsList})
+          LIMIT 1`,
+    )) as Array<{ thread_id: string }>;
+    if (headerHits[0]?.thread_id) threadId = headerHits[0].thread_id;
+  }
 
-    // Subject-fallback threading: only if the normalized subject is non-empty.
-    if (!threadId && normSubject !== '') {
-      const cutoff = new Date(p.receivedAt - THREAD_SUBJECT_FALLBACK_MS);
-      const subjectHits = tx
-        .select({ id: threads.id, subject: threads.subject })
-        .from(threads)
-        .where(and(eq(threads.mailboxId, recipient.mailboxId), gte(threads.lastMessageAt, cutoff)))
-        .all();
-      const match = subjectHits.find((t) => normalizeSubject(t.subject) === normSubject);
-      if (match) threadId = match.id;
-    }
+  // Subject-fallback threading: only if the normalized subject is non-empty.
+  if (!threadId && normSubject !== '') {
+    const cutoff = new Date(p.receivedAt - THREAD_SUBJECT_FALLBACK_MS);
+    const subjectHits = await db
+      .select({ id: threads.id, subject: threads.subject })
+      .from(threads)
+      .where(and(eq(threads.mailboxId, recipient.mailboxId), gte(threads.lastMessageAt, cutoff)))
+      .all();
+    const match = subjectHits.find((t) => normalizeSubject(t.subject) === normSubject);
+    if (match) threadId = match.id;
+  }
 
-    if (!threadId) {
-      threadId = randomUUID();
-      tx.insert(threads)
-        .values({
-          id: threadId,
-          mailboxId: recipient.mailboxId,
-          subject: p.subject,
-          snippet,
-          lastMessageAt: receivedAtDate,
-          messageCount: 1,
-          unreadCount: 1,
-        })
-        .run();
-    } else {
-      tx.update(threads)
-        .set({
-          snippet,
-          lastMessageAt: receivedAtDate,
-          messageCount: sql`message_count + 1`,
-          unreadCount: sql`unread_count + 1`,
-        })
-        .where(eq(threads.id, threadId))
-        .run();
-    }
-
-    tx.insert(messages)
+  if (!threadId) {
+    threadId = randomUUID();
+    await db
+      .insert(threads)
       .values({
-        id: messageId,
-        threadId,
-        fromAddress: p.from.address,
-        fromName: p.from.name ?? null,
-        toAddresses: JSON.stringify(p.to),
-        ccAddresses: JSON.stringify(p.cc),
-        bccAddresses: JSON.stringify(p.bcc),
+        id: threadId,
+        mailboxId: recipient.mailboxId,
         subject: p.subject,
-        html: p.html,
-        text: p.text,
-        headers: JSON.stringify(headerMap),
-        rawR2Key: p.rawR2Key,
-        readAt: null,
-        receivedAt: receivedAtDate,
+        snippet,
+        lastMessageAt: receivedAtDate,
+        messageCount: 1,
+        unreadCount: 1,
       })
       .run();
-
-    let verifiedDomain = false;
-    if (hasPendingDomain) {
-      tx.update(domains)
-        .set({ verifiedAt: receivedAtDate, dkimStatus: 'verified' })
-        .where(eq(domains.id, recipient.domainId))
-        .run();
-      verifiedDomain = true;
-    }
-
-    tx.insert(contacts)
-      .values({
-        id: randomUUID(),
-        email: p.from.address,
-        name: p.from.name ?? null,
-        lastSeenAt: receivedAtDate,
+  } else {
+    await db
+      .update(threads)
+      .set({
+        snippet,
+        lastMessageAt: receivedAtDate,
+        messageCount: sql`message_count + 1`,
+        unreadCount: sql`unread_count + 1`,
       })
-      .onConflictDoUpdate({
-        target: contacts.email,
-        set: {
-          name: sql`COALESCE(excluded.name, name)`,
-          lastSeenAt: sql`MAX(COALESCE(last_seen_at, 0), excluded.last_seen_at)`,
-        },
-      })
+      .where(eq(threads.id, threadId))
       .run();
+  }
 
-    return { ok: true, threadId, messageId, mailboxId: recipient.mailboxId, verifiedDomain };
-  });
+  await db
+    .insert(messages)
+    .values({
+      id: messageId,
+      threadId,
+      fromAddress: p.from.address,
+      fromName: p.from.name ?? null,
+      toAddresses: JSON.stringify(p.to),
+      ccAddresses: JSON.stringify(p.cc),
+      bccAddresses: JSON.stringify(p.bcc),
+      subject: p.subject,
+      html: p.html,
+      text: p.text,
+      headers: JSON.stringify(headerMap),
+      rawR2Key: p.rawR2Key,
+      readAt: null,
+      receivedAt: receivedAtDate,
+    })
+    .run();
+
+  let verifiedDomain = false;
+  if (hasPendingDomain) {
+    await db
+      .update(domains)
+      .set({ verifiedAt: receivedAtDate, dkimStatus: 'verified' })
+      .where(eq(domains.id, recipient.domainId))
+      .run();
+    verifiedDomain = true;
+  }
+
+  await db
+    .insert(contacts)
+    .values({
+      id: randomUUID(),
+      email: p.from.address,
+      name: p.from.name ?? null,
+      lastSeenAt: receivedAtDate,
+    })
+    .onConflictDoUpdate({
+      target: contacts.email,
+      set: {
+        name: sql`COALESCE(excluded.name, name)`,
+        lastSeenAt: sql`MAX(COALESCE(last_seen_at, 0), excluded.last_seen_at)`,
+      },
+    })
+    .run();
+
+  return { ok: true, threadId, messageId, mailboxId: recipient.mailboxId, verifiedDomain };
 }

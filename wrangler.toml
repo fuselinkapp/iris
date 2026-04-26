@@ -1,0 +1,24 @@
+name = "iris-mail-worker"
+main = "worker/index.ts"
+compatibility_date = "2025-04-01"
+
+# This is an Email Worker — it has no HTTP routes. Triggered by Cloudflare
+# Email Routing forwarding mail to it. Bind it from the dashboard:
+# Email > Email Routing > Email Workers > select "iris-mail-worker".
+
+# D1 binding for the inbox database. One-time setup:
+#   pnpm exec wrangler d1 create iris-d1
+# Paste the printed database_id below, then apply migrations:
+#   pnpm exec wrangler d1 migrations apply iris-d1
+[[d1_databases]]
+binding = "IRIS_DB"
+database_name = "iris-d1"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+migrations_dir = "db/migrations"
+
+# R2 binding for raw .eml archive. Declared now so the next phase can write
+# without a config bump. Create the bucket once with:
+#   pnpm exec wrangler r2 bucket create iris-raw
+[[r2_buckets]]
+binding = "IRIS_RAW"
+bucket_name = "iris-raw"
