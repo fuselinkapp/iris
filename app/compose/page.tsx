@@ -6,7 +6,7 @@ import { getMailboxesForSend } from '@/app/actions/grandma';
 import { ComposeForm } from '@/components/compose-form';
 import { Card } from '@/components/ui/card';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export default async function ComposePage() {

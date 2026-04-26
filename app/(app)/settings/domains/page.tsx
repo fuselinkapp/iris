@@ -1,6 +1,7 @@
 import { DomainsList } from '@/components/domains-list';
 import { listDomains } from '@/lib/db/queries';
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export default async function DomainsSettingsPage({

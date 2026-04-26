@@ -1,10 +1,16 @@
 name = "iris-mail-worker"
 main = "worker/index.ts"
 compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
 
 # This is an Email Worker — it has no HTTP routes. Triggered by Cloudflare
 # Email Routing forwarding mail to it. Bind it from the dashboard:
 # Email > Email Routing > Email Workers > select "iris-mail-worker".
+#
+# This file is shared by the Worker AND by `pnpm dev` (via next-on-pages's
+# setupDevPlatform), so the same D1 + R2 bindings appear in both runtimes.
+# The Pages project is configured separately via the Cloudflare dashboard or
+# `wrangler pages project create iris-dashboard` — see DEPLOY-PAGES.md.
 
 # D1 binding for the inbox database. One-time setup:
 #   pnpm exec wrangler d1 create iris-d1

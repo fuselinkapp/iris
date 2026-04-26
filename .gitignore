@@ -12,5 +12,4 @@ out
 coverage
 dist
 tsconfig.tsbuildinfo
-.iris/
 worker-configuration.d.ts

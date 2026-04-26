@@ -1,8 +1,8 @@
 import 'server-only';
 
-import { randomUUID } from 'node:crypto';
-
 import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
+
+const randomUUID = () => crypto.randomUUID();
 
 import { domains, mailboxes, messages, threads } from '@/db/schema';
 
@@ -33,7 +33,7 @@ export type ThreadRow = {
 };
 
 export async function listMailboxes(): Promise<MailboxWithDomain[]> {
-  const db = getDb();
+  const db = await getDb();
   const rows = await db
     .select({
       mailbox: mailboxes,
@@ -63,7 +63,7 @@ export async function listMailboxes(): Promise<MailboxWithDomain[]> {
 }
 
 export async function listThreads(mailboxId: string | 'all'): Promise<ThreadRow[]> {
-  const db = getDb();
+  const db = await getDb();
 
   const baseQuery = db
     .select({
@@ -162,7 +162,7 @@ function extractMessageId(raw: string): string | null {
 }
 
 export async function getThreadDetail(threadId: string): Promise<ThreadDetail | null> {
-  const db = getDb();
+  const db = await getDb();
   const [row] = await db
     .select({ thread: threads, mailbox: mailboxes, domain: domains })
     .from(threads)
@@ -201,16 +201,20 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
 }
 
 export async function markThreadRead(threadId: string): Promise<{ updated: number }> {
-  const db = getDb();
-  return db.transaction((tx) => {
-    const result = tx
-      .update(messages)
-      .set({ readAt: new Date() })
-      .where(and(eq(messages.threadId, threadId), isNull(messages.readAt)))
-      .run();
-    tx.update(threads).set({ unreadCount: sql`0` }).where(eq(threads.id, threadId)).run();
-    return { updated: result.changes ?? 0 };
-  });
+  const db = await getDb();
+  // Sequential writes — IrisDb is a union of better-sqlite3 (sync transaction
+  // callback) and D1 (no interactive transactions), so db.transaction() can't
+  // unify. A partial failure leaves messages.read_at set without
+  // threads.unread_count being reset; self-heals on the next mark-read.
+  const result = await db
+    .update(messages)
+    .set({ readAt: new Date() })
+    .where(and(eq(messages.threadId, threadId), isNull(messages.readAt)))
+    .run();
+  await db.update(threads).set({ unreadCount: sql`0` }).where(eq(threads.id, threadId)).run();
+  // better-sqlite3 puts changes at result.changes; D1 puts it at result.meta.changes.
+  const meta = result as { changes?: number; meta?: { changes?: number } };
+  return { updated: meta.changes ?? meta.meta?.changes ?? 0 };
 }
 
 export type DomainRow = {
@@ -222,7 +226,7 @@ export type DomainRow = {
 };
 
 export async function listDomains(): Promise<DomainRow[]> {
-  const db = getDb();
+  const db = await getDb();
   const rows = await db
     .select({
       id: domains.id,
@@ -254,48 +258,52 @@ export async function addDomain(input: string): Promise<AddDomainResult> {
   if (normalized.length === 0 || normalized.length > 253) return { ok: false, reason: 'invalid' };
   if (!DOMAIN_REGEX.test(normalized)) return { ok: false, reason: 'invalid' };
 
-  const db = getDb();
+  const db = await getDb();
+  // Sequential writes (see markThreadRead for the union-type rationale). The
+  // existence check + insert race is caught by the UNIQUE constraint catch
+  // below — both better-sqlite3 and D1 surface the constraint violation in
+  // the error message.
   try {
-    return db.transaction((tx) => {
-      const existing = tx
-        .select({ id: domains.id })
-        .from(domains)
-        .where(eq(domains.domain, normalized))
-        .all();
-      if (existing.length > 0) return { ok: false, reason: 'duplicate' as const };
+    const existing = await db
+      .select({ id: domains.id })
+      .from(domains)
+      .where(eq(domains.domain, normalized))
+      .all();
+    if (existing.length > 0) return { ok: false, reason: 'duplicate' };
 
-      const domainId = randomUUID();
-      const mailboxId = randomUUID();
-      tx.insert(domains)
-        .values({
-          id: domainId,
-          domain: normalized,
-          verifiedAt: null,
-          dkimStatus: 'pending',
-        })
-        .run();
-      tx.insert(mailboxes)
-        .values({
-          id: mailboxId,
-          domainId,
-          localPart: 'hello',
-          displayName: normalized,
-        })
-        .run();
-      return { ok: true as const, domainId, mailboxId };
-    });
+    const domainId = randomUUID();
+    const mailboxId = randomUUID();
+    await db
+      .insert(domains)
+      .values({
+        id: domainId,
+        domain: normalized,
+        verifiedAt: null,
+        dkimStatus: 'pending',
+      })
+      .run();
+    await db
+      .insert(mailboxes)
+      .values({
+        id: mailboxId,
+        domainId,
+        localPart: 'hello',
+        displayName: normalized,
+      })
+      .run();
+    return { ok: true, domainId, mailboxId };
   } catch (err) {
-    // Race fallback: concurrent submits can both pass the existence check, then
-    // the second insert trips the domains_domain_idx UNIQUE constraint.
     if (isUniqueConstraintError(err)) return { ok: false, reason: 'duplicate' };
     throw err;
   }
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    'code' in err &&
-    (err as { code?: unknown }).code === 'SQLITE_CONSTRAINT_UNIQUE'
-  );
+  if (!(err instanceof Error)) return false;
+  // better-sqlite3: err.code === 'SQLITE_CONSTRAINT_UNIQUE'
+  if ('code' in err && (err as { code?: unknown }).code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    return true;
+  }
+  // D1: err.message contains 'UNIQUE constraint failed'
+  return /UNIQUE constraint failed/i.test(err.message);
 }

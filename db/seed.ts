@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
 
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 
+import { resolveLocalD1Path } from '@/lib/db/local-path';
+
 import * as schema from './schema';
 
-const dbPath = resolve(process.cwd(), '.iris/iris.db');
+const dbPath = resolveLocalD1Path();
 const sqlite = new Database(dbPath);
 sqlite.pragma('foreign_keys = ON');
 const db = drizzle(sqlite, { schema });

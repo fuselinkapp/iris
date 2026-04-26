@@ -2,7 +2,7 @@
 
 This walkthrough turns the local repo into a live Iris instance: a Worker that catches mail via Cloudflare Email Routing, a D1 database for the inbox, and (declared but not used yet) an R2 bucket for raw `.eml` archives.
 
-The Next.js dashboard deploy to Cloudflare Pages is **not** covered here yet — that comes in a later phase. This doc is exclusively about the inbound Worker.
+For the **dashboard** deploy (the UI you read mail in), see [`DEPLOY-PAGES.md`](./DEPLOY-PAGES.md). It reuses the D1 + R2 you create here. Run this Worker walkthrough first, then Pages.
 
 ## What you'll need
 

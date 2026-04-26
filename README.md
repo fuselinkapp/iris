@@ -26,12 +26,13 @@ If you want to help shape v0, open an issue or grab one from the [issues tab](ht
 
 ```bash
 pnpm install
-pnpm db:migrate   # creates .iris/iris.db with the v0 schema
-pnpm db:seed      # 18 fake threads across 3 mailboxes on 2 domains
-pnpm dev
+pnpm db:reset     # creates the local D1, applies migrations, seeds 18 fake threads
+pnpm dev          # runs Next dev with bindings wired via @cloudflare/next-on-pages
 ```
 
 Then open <http://localhost:3000>, flip the Mode dial in the sidebar to **Grandma**, and you'll see the seeded threads.
+
+> Local storage lives at `.wrangler/state/v3/d1/...sqlite` — wrangler's local D1 simulator. The dashboard reads from the same file the Worker test harness writes to, so curl-ing inbound and seeing it in the UI just works. Older checkouts had a `.iris/` directory; you can `rm -rf .iris/` after pulling — it's no longer used.
 
 The reader renders HTML emails inside a sandboxed iframe with DOMPurify sanitization. Remote images (often tracking pixels) are blocked by default — click **Show images** at the top of any HTML message to load them. Plain-text threads continue to render as before.
 
@@ -52,7 +53,7 @@ curl -X POST http://localhost:3000/api/ingest \
 
 Then refresh the Grandma view to see it land. Other samples in `samples/inbound/` exercise threading via `In-Reply-To`, the **Pending → Verified** flip on first inbound to a new domain, and subject-fallback grouping for transactional mail without threading headers.
 
-To exercise the **Cloudflare Email Worker** locally without spinning up wrangler — same parser, same `ingestMessage` function the deployed Worker uses, just writing to `.iris/iris.db` instead of D1:
+To exercise the **Cloudflare Email Worker** locally without spinning up wrangler — same parser, same `ingestMessage` function the deployed Worker uses, just writing to the same local D1 file `pnpm dev` reads from:
 
 ```bash
 pnpm worker:test                                       # default sample
@@ -71,7 +72,10 @@ Outbound currently runs in **sandbox mode**: recipients see `onboarding@resend.d
 
 ## Production deploy
 
-See [`DEPLOY.md`](./DEPLOY.md) for the Cloudflare walkthrough — Worker, D1, R2, and Email Routing wiring.
+Two pieces — both Cloudflare:
+
+- [`DEPLOY.md`](./DEPLOY.md) — the inbound Email Worker, D1, R2, and Email Routing wiring.
+- [`DEPLOY-PAGES.md`](./DEPLOY-PAGES.md) — the dashboard on Cloudflare Pages (reads the same D1 the Worker writes to). Includes the recommended Cloudflare Access setup so the URL isn't publicly readable.
 
 ## License
 
