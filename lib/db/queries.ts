@@ -129,6 +129,7 @@ export type MessageRow = {
   fromName: string | null;
   toAddresses: string[];
   text: string | null;
+  html: string | null;
   receivedAt: number;
   readAt: number | null;
 };
@@ -192,6 +193,7 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
       fromName: m.fromName,
       toAddresses: parseAddresses(m.toAddresses),
       text: m.text,
+      html: m.html,
       receivedAt: m.receivedAt.getTime(),
       readAt: m.readAt?.getTime() ?? null,
     })),

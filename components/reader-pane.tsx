@@ -6,8 +6,9 @@ import { useEffect, useRef, useState } from 'react';
 import { getThread, markThreadRead } from '@/app/actions/grandma';
 import type { SendableMailbox } from '@/app/actions/grandma';
 import { ComposeForm } from '@/components/compose-form';
+import { HtmlMessageBody } from '@/components/html-message-body';
 import { Button } from '@/components/ui/button';
-import type { ThreadDetail } from '@/lib/db/queries';
+import type { MessageRow, ThreadDetail } from '@/lib/db/queries';
 import { buildReplySubject } from '@/lib/email/subject';
 import { formatDateTime } from '@/lib/format-datetime';
 
@@ -149,9 +150,7 @@ export function ReaderPane({
                 <span>{formatDateTime(m.receivedAt)}</span>
               </div>
             )}
-            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-[var(--text)]">
-              {m.text ?? '(no text body)'}
-            </pre>
+            <MessageBody message={m} />
           </div>
         ))}
 
@@ -178,6 +177,17 @@ export function ReaderPane({
         )}
       </div>
     </article>
+  );
+}
+
+function MessageBody({ message }: { message: MessageRow }) {
+  if (message.html?.trim()) {
+    return <HtmlMessageBody html={message.html} />;
+  }
+  return (
+    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-[var(--text)]">
+      {message.text ?? '(no text body)'}
+    </pre>
   );
 }
 

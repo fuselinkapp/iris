@@ -23,6 +23,7 @@ type Seed = {
   subject: string;
   snippet: string;
   body: string;
+  html?: string;
   receivedAt: number;
   read?: boolean;
 };
@@ -36,6 +37,14 @@ const SEEDS: Seed[] = [
     subject: 'Your weekly payout of $1,284.50 is on its way',
     snippet: "We've initiated a transfer to your bank account ending in 4242.",
     body: 'Your payout is on its way and should arrive in 2 business days.',
+    html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:540px;padding:24px;color:#1a1a1a;">
+  <h1 style="font-size:18px;margin:0 0 16px;font-weight:500;color:#374151;">Your weekly payout</h1>
+  <p style="font-size:32px;font-weight:600;margin:0 0 8px;color:#111827;">$1,284.50</p>
+  <p style="color:#6b7280;margin:0 0 20px;">on its way to your bank account ending in 4242</p>
+  <a href="https://dashboard.stripe.com/payouts" style="display:inline-block;background:#635bff;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:500;">View in dashboard</a>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+  <p style="color:#9ca3af;font-size:12px;margin:0;">Funds typically arrive within 2 business days. <img src="https://stripe.com/img/v3/spacer.gif" width="1" height="1" alt="" style="display:inline;"></p>
+</div>`,
     receivedAt: minutes(7),
   },
   {
@@ -45,6 +54,23 @@ const SEEDS: Seed[] = [
     subject: '✓ Production deploy succeeded — catnap.dev',
     snippet: 'Your latest deployment is live at https://catnap.dev (build #482, 2.1s).',
     body: 'Production deployment completed successfully.',
+    html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;padding:32px 24px;color:#0f172a;">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+    <span style="display:inline-block;width:32px;height:32px;background:#000;border-radius:6px;color:#fff;text-align:center;line-height:32px;font-weight:600;">▲</span>
+    <span style="font-weight:600;font-size:16px;">Vercel</span>
+  </div>
+  <h1 style="font-size:24px;margin:0 0 8px;font-weight:600;">Deployment ready</h1>
+  <p style="margin:0 0 24px;color:#64748b;">Build #482 finished in 2.1s.</p>
+  <div style="border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:24px;">
+    <p style="margin:0 0 4px;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">Production</p>
+    <a href="https://catnap.dev" style="color:#0f172a;text-decoration:none;font-weight:500;font-size:18px;">catnap.dev</a>
+  </div>
+  <a href="https://vercel.com/oz/catnap/deployments/482" style="display:inline-block;background:#000;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:500;">View deployment</a>
+  <p style="margin-top:32px;color:#94a3b8;font-size:12px;">
+    <img src="https://vercel.com/api/cron-images/badge.png" width="60" height="20" alt="badge" style="vertical-align:middle;">
+    Triggered by oz on commit ab12cd3
+  </p>
+</div>`,
     receivedAt: minutes(34),
     read: true,
   },
@@ -302,6 +328,7 @@ const seedTx = sqlite.transaction(() => {
         toAddresses: JSON.stringify([seed.mailbox]),
         subject: seed.subject,
         text: seed.body,
+        html: seed.html ?? null,
         headers: JSON.stringify({ 'message-id': headerMessageId }),
         receivedAt: new Date(seed.receivedAt),
         readAt: seed.read ? new Date(seed.receivedAt) : null,

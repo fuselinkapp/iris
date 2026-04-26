@@ -33,6 +33,8 @@ pnpm dev
 
 Then open <http://localhost:3000>, flip the Mode dial in the sidebar to **Grandma**, and you'll see the seeded threads.
 
+The reader renders HTML emails inside a sandboxed iframe with DOMPurify sanitization. Remote images (often tracking pixels) are blocked by default — click **Show images** at the top of any HTML message to load them. Plain-text threads continue to render as before.
+
 ## Trying out inbound
 
 The `/api/ingest` endpoint accepts pre-parsed messages, so you can exercise the inbound pipeline without a Cloudflare Worker yet. The Worker phase (0.6) will call this same endpoint with the same payload shape.
