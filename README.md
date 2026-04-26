@@ -57,6 +57,16 @@ pnpm worker:test                                       # default sample
 pnpm worker:test samples/inbound/raw/01-stripe.eml     # explicit path
 ```
 
+## Sending mail
+
+Outbound is via Resend. Set `RESEND_API_KEY` in `.env.local` for real sends; without the key, the compose form runs as a dry-run that still records the message locally so you can exercise the UI flow.
+
+Hit **Compose** in the sidebar (or visit `/compose`), pick a From mailbox, type a recipient + subject + body, and Send. Sent messages appear in your own inbox under that mailbox so the thread reads as a real two-way conversation.
+
+Reply lives inside the reader pane — open a thread in Grandma, click **Reply**, type, hit Send. Replies thread with the original via `In-Reply-To` headers, so when the recipient replies *back* via real inbound, it merges into the same thread.
+
+Outbound currently runs in **sandbox mode**: recipients see `onboarding@resend.dev` as the From address; their replies route back to your real mailbox via the `Reply-To` header. Real per-domain From requires verifying each domain at Resend (a separate DKIM dance from Cloudflare Email Routing). That's a future phase.
+
 ## Production deploy
 
 See [`DEPLOY.md`](./DEPLOY.md) for the Cloudflare walkthrough — Worker, D1, R2, and Email Routing wiring.

@@ -107,6 +107,24 @@ pnpm exec wrangler d1 migrations apply iris-d1     # apply to remote D1
 pnpm exec wrangler deploy                          # redeploy Worker
 ```
 
+## Outbound via Resend
+
+Outbound currently runs in **sandbox mode**: regardless of which mailbox the user picks, Resend dispatches with `onboarding@resend.dev` as the SMTP From. The user's chosen mailbox is recorded as `from_address` in the DB (so the UI reads coherently) and sent as the `Reply-To` header (so recipients' replies route back through Cloudflare Email Routing → Worker → Iris).
+
+To enable outbound at all:
+
+```bash
+# Locally
+echo 'RESEND_API_KEY=re_yourkey...' >> .env.local
+
+# In production (once Pages deploy lands), set as a Cloudflare Pages env var
+# in the dashboard, or via: pnpm exec wrangler pages secret put RESEND_API_KEY
+```
+
+Without `RESEND_API_KEY` set, the compose form runs in dry-run mode — DB write happens, no actual send. Useful for exercising the UI in development.
+
+**Real per-domain From** (so your recipients see `hello@yourdomain.com` instead of `onboarding@resend.dev`) requires a separate verification flow at Resend: you add the domain in Resend's dashboard, paste their generated DKIM records into your DNS, and wait for verification. Iris doesn't yet have UI for this — it's a future phase. In the meantime, sandbox mode lets the inbound/outbound loop work end-to-end with the obvious caveat that the From address looks generic.
+
 ## Notes
 
 - The local `.iris/iris.db` and the remote D1 are separate, independent stores. Migrating data between them is not automated.

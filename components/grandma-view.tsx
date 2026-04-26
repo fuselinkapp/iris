@@ -169,8 +169,10 @@ export function GrandmaView() {
       <ReaderPane
         threadId={selectedThread}
         hasUnread={hasUnread}
+        mailboxes={data.mailboxes.map((m) => ({ id: m.id, address: m.address }))}
+        hasResendKey={data.hasResendKey}
         onClose={() => selectThread(null)}
-        onMarkedRead={refetch}
+        onChanged={refetch}
       />
     </div>
   );

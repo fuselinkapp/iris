@@ -13,6 +13,7 @@ import {
 export type GrandmaData = {
   mailboxes: MailboxWithDomain[];
   threads: ThreadRow[];
+  hasResendKey: boolean;
 };
 
 // TODO(auth): once auth lands, gate this on the session cookie and validate
@@ -22,7 +23,7 @@ export async function getGrandmaData(mailboxId: string | null): Promise<GrandmaD
     listMailboxes(),
     listThreads(mailboxId ?? 'all'),
   ]);
-  return { mailboxes, threads };
+  return { mailboxes, threads, hasResendKey: Boolean(process.env.RESEND_API_KEY) };
 }
 
 // TODO(auth): gate on session + validate threadId as UUID before phase 1.
@@ -33,4 +34,13 @@ export async function getThread(threadId: string): Promise<ThreadDetail | null> 
 // TODO(auth): gate on session + validate threadId as UUID before phase 1.
 export async function markThreadRead(threadId: string): Promise<{ updated: number }> {
   return markThreadReadQuery(threadId);
+}
+
+export type SendableMailbox = { id: string; address: string };
+
+// Lightweight mailbox list for the compose dropdown — strips the unread-count
+// join `getGrandmaData` does. The compose page doesn't need it.
+export async function getMailboxesForSend(): Promise<SendableMailbox[]> {
+  const all = await listMailboxes();
+  return all.map((m) => ({ id: m.id, address: m.address }));
 }

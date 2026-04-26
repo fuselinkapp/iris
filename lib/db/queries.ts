@@ -124,6 +124,7 @@ export type ThreadHeader = {
 
 export type MessageRow = {
   id: string;
+  messageId: string | null;
   fromAddress: string;
   fromName: string | null;
   toAddresses: string[];
@@ -144,6 +145,19 @@ function parseAddresses(raw: string): string[] {
   } catch {
     return [];
   }
+}
+
+function extractMessageId(raw: string): string | null {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      const v = (parsed as Record<string, unknown>)['message-id'];
+      return typeof v === 'string' ? v : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 export async function getThreadDetail(threadId: string): Promise<ThreadDetail | null> {
@@ -173,6 +187,7 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
     },
     messages: msgs.map((m) => ({
       id: m.id,
+      messageId: extractMessageId(m.headers),
       fromAddress: m.fromAddress,
       fromName: m.fromName,
       toAddresses: parseAddresses(m.toAddresses),

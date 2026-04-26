@@ -1,11 +1,14 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { Reply, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { getThread, markThreadRead } from '@/app/actions/grandma';
+import type { SendableMailbox } from '@/app/actions/grandma';
+import { ComposeForm } from '@/components/compose-form';
 import { Button } from '@/components/ui/button';
 import type { ThreadDetail } from '@/lib/db/queries';
+import { buildReplySubject } from '@/lib/email/subject';
 import { formatDateTime } from '@/lib/format-datetime';
 
 type Status = 'idle' | 'loading' | 'loaded' | 'missing';
@@ -13,37 +16,39 @@ type Status = 'idle' | 'loading' | 'loaded' | 'missing';
 export function ReaderPane({
   threadId,
   hasUnread,
+  mailboxes,
+  hasResendKey,
   onClose,
-  onMarkedRead,
+  onChanged,
 }: {
   threadId: string | null;
   hasUnread: boolean;
+  mailboxes: SendableMailbox[];
+  hasResendKey: boolean;
   onClose: () => void;
-  onMarkedRead: () => void;
+  onChanged: () => void;
 }) {
   const [data, setData] = useState<ThreadDetail | null>(null);
   const [status, setStatus] = useState<Status>('idle');
+  const [replyOpen, setReplyOpen] = useState(false);
 
-  // Snapshot the unread flag and the callback at render time so the effect
-  // depends only on `threadId`. Re-running on `hasUnread` flipping to false
-  // (after refetch) would otherwise re-fetch the thread on every mark-read.
   const hasUnreadRef = useRef(hasUnread);
-  const onMarkedReadRef = useRef(onMarkedRead);
+  const onChangedRef = useRef(onChanged);
   hasUnreadRef.current = hasUnread;
-  onMarkedReadRef.current = onMarkedRead;
+  onChangedRef.current = onChanged;
 
-  // Track which thread IDs we've already attempted to mark, so React 18's
-  // strict-mode double-invoke and any incidental re-runs don't double-fire.
   const markedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!threadId) {
       setData(null);
       setStatus('idle');
+      setReplyOpen(false);
       return;
     }
     let cancelled = false;
     setStatus('loading');
+    setReplyOpen(false);
     getThread(threadId).then(async (next) => {
       if (cancelled) return;
       if (!next) {
@@ -56,13 +61,20 @@ export function ReaderPane({
       if (hasUnreadRef.current && !markedRef.current.has(threadId)) {
         markedRef.current.add(threadId);
         const result = await markThreadRead(threadId);
-        if (!cancelled && result.updated > 0) onMarkedReadRef.current();
+        if (!cancelled && result.updated > 0) onChangedRef.current();
       }
     });
     return () => {
       cancelled = true;
     };
   }, [threadId]);
+
+  async function refetchThread() {
+    if (!threadId) return;
+    const next = await getThread(threadId);
+    if (next) setData(next);
+    onChangedRef.current();
+  }
 
   if (!threadId || status === 'idle') {
     return <EmptyState />;
@@ -86,6 +98,11 @@ export function ReaderPane({
   if (!data) return <EmptyState />;
 
   const firstMessage = data.messages[0];
+  const lastMessage = data.messages[data.messages.length - 1];
+  const lastMessageId = lastMessage?.messageId ?? null;
+  const replyToAddress = firstMessage?.fromAddress ?? '';
+  const replyMailboxId = data.thread.mailboxId;
+  const replyMailbox = mailboxes.find((m) => m.id === replyMailboxId);
 
   return (
     <article className="flex h-full flex-col overflow-hidden">
@@ -107,9 +124,16 @@ export function ReaderPane({
             </div>
           )}
         </div>
-        <Button variant="ghost" size="icon" aria-label="Close reader" onClick={onClose}>
-          <X className="size-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {!replyOpen && replyMailbox && lastMessageId && (
+            <Button variant="ghost" size="sm" onClick={() => setReplyOpen(true)}>
+              <Reply className="size-4" /> Reply
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" aria-label="Close reader" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
@@ -130,6 +154,28 @@ export function ReaderPane({
             </pre>
           </div>
         ))}
+
+        {replyOpen && replyMailbox && lastMessage && lastMessageId && (
+          <div className="mt-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)]/40 p-5">
+            <p className="mb-3 text-[0.7rem] uppercase tracking-wider text-[var(--text-muted)]">
+              Reply
+            </p>
+            <ComposeForm
+              mailboxes={mailboxes}
+              lockedMailboxId={replyMailboxId}
+              defaultTo={replyToAddress}
+              defaultSubject={buildReplySubject(data.thread.subject)}
+              replyTo={{ threadId: data.thread.id, messageId: lastMessageId }}
+              showSandboxNotice={false}
+              hasResendKey={hasResendKey}
+              onSent={() => {
+                setReplyOpen(false);
+                refetchThread();
+              }}
+              onCancel={() => setReplyOpen(false)}
+            />
+          </div>
+        )}
       </div>
     </article>
   );

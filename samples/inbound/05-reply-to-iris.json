@@ -1,0 +1,9 @@
+{
+  "from": { "name": "Test Recipient", "address": "alice@example.com" },
+  "to": ["hello@catnap.dev"],
+  "subject": "Re: My test from Iris",
+  "text": "Hey — got your message. Reply works.\n\nAlice",
+  "headers": { "message-id": "<reply-from-alice@example.com>" },
+  "inReplyTo": "<REPLACE-WITH-MESSAGE-ID-FROM-SENT-MESSAGE@iris.local>",
+  "references": ["<REPLACE-WITH-MESSAGE-ID-FROM-SENT-MESSAGE@iris.local>"]
+}
