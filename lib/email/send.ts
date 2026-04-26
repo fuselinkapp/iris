@@ -1,21 +1,13 @@
 import 'server-only';
 
 import { eq, sql } from 'drizzle-orm';
-import { Resend } from 'resend';
 
 import { domains, mailboxes, messages, threads } from '@/db/schema';
 import type { IrisDb } from '@/lib/db/types';
+import { getResendClient } from '@/lib/resend/client';
 
 const SANDBOX_FROM = 'onboarding@resend.dev';
 const randomUUID = () => crypto.randomUUID();
-
-let resendClient: Resend | null = null;
-function getResendClient(): Resend | null {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return null;
-  if (!resendClient) resendClient = new Resend(key);
-  return resendClient;
-}
 
 export type SendInput = {
   fromMailboxId: string;
@@ -46,6 +38,7 @@ export async function sendMessage(input: SendInput, db: IrisDb): Promise<SendRes
       mailboxId: mailboxes.id,
       localPart: mailboxes.localPart,
       domain: domains.domain,
+      resendVerifiedAt: domains.resendVerifiedAt,
     })
     .from(mailboxes)
     .innerJoin(domains, eq(mailboxes.domainId, domains.id))
@@ -54,6 +47,10 @@ export async function sendMessage(input: SendInput, db: IrisDb): Promise<SendRes
   if (!sender) return { ok: false, reason: 'unknown_mailbox' };
 
   const senderAddress = `${sender.localPart}@${sender.domain}`;
+  // Use the real From address only when this domain is verified at Resend.
+  // Otherwise fall back to the sandbox so Resend doesn't 422 the send.
+  const senderVerified = sender.resendVerifiedAt !== null;
+  const wireFrom = senderVerified ? senderAddress : SANDBOX_FROM;
   const ourMessageId = `<${randomUUID()}@iris.local>`;
   const headerMap: Record<string, string> = { 'message-id': ourMessageId };
   if (input.replyTo) {
@@ -73,7 +70,7 @@ export async function sendMessage(input: SendInput, db: IrisDb): Promise<SendRes
     // chains of depth ≥ 3. Cheap fix: fetch the parent message's headers
     // when constructing the Resend payload.
     const resp = await client.emails.send({
-      from: SANDBOX_FROM,
+      from: wireFrom,
       to: [to],
       subject,
       text,

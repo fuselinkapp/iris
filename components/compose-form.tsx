@@ -80,14 +80,24 @@ export function ComposeForm({
     });
   }
 
+  // Sandbox notice only when the active From mailbox can't send for real —
+  // i.e., its domain isn't verified at Resend yet. Verified mailboxes hide
+  // the notice entirely; the send goes from the real address.
+  const activeMailbox = mailboxes.find((m) => m.id === fromId);
+  const sandboxActive = !(activeMailbox?.resendVerified ?? false);
+
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
-      {showSandboxNotice && (
+      {showSandboxNotice && sandboxActive && (
         <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)]/60 px-3 py-2 text-xs text-[var(--text-muted)]">
           {hasResendKey ? (
             <>
               <strong className="text-[var(--text)]">Sandbox mode.</strong> Recipients see{' '}
-              <code>onboarding@resend.dev</code> as From. Replies route back via Reply-To.
+              <code>onboarding@resend.dev</code> as From. Set up sending for this domain in{' '}
+              <a href="/settings/domains" className="underline">
+                Settings → Domains
+              </a>{' '}
+              to send from the real address.
             </>
           ) : (
             <>

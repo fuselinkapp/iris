@@ -2,11 +2,11 @@ import 'server-only';
 
 import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
 
-const randomUUID = () => crypto.randomUUID();
-
 import { domains, mailboxes, messages, threads } from '@/db/schema';
 
 import { getDb } from './client';
+
+const randomUUID = () => crypto.randomUUID();
 
 const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
@@ -18,6 +18,7 @@ export type MailboxWithDomain = {
   address: string;
   displayName: string | null;
   unreadCount: number;
+  resendVerified: boolean;
 };
 
 export type ThreadRow = {
@@ -59,6 +60,7 @@ export async function listMailboxes(): Promise<MailboxWithDomain[]> {
     address: `${mailbox.localPart}@${domain.domain}`,
     displayName: mailbox.displayName,
     unreadCount: unreadByMailbox.get(mailbox.id) ?? 0,
+    resendVerified: domain.resendVerifiedAt !== null,
   }));
 }
 
@@ -221,6 +223,8 @@ export type DomainRow = {
   id: string;
   domain: string;
   verifiedAt: number | null;
+  resendDomainId: string | null;
+  resendVerifiedAt: number | null;
   createdAt: number;
   mailboxCount: number;
 };
@@ -232,6 +236,8 @@ export async function listDomains(): Promise<DomainRow[]> {
       id: domains.id,
       domain: domains.domain,
       verifiedAt: domains.verifiedAt,
+      resendDomainId: domains.resendDomainId,
+      resendVerifiedAt: domains.resendVerifiedAt,
       createdAt: domains.createdAt,
       mailboxCount: count(mailboxes.id),
     })
@@ -243,9 +249,54 @@ export async function listDomains(): Promise<DomainRow[]> {
     id: r.id,
     domain: r.domain,
     verifiedAt: r.verifiedAt?.getTime() ?? null,
+    resendDomainId: r.resendDomainId,
+    resendVerifiedAt: r.resendVerifiedAt?.getTime() ?? null,
     createdAt: r.createdAt.getTime(),
     mailboxCount: Number(r.mailboxCount ?? 0),
   }));
+}
+
+export type DomainResendUpdate = {
+  resendDomainId?: string;
+  resendVerifiedAt?: Date | null;
+};
+
+export async function getDomainById(domainId: string): Promise<DomainRow | null> {
+  const db = await getDb();
+  const [row] = await db
+    .select({
+      id: domains.id,
+      domain: domains.domain,
+      verifiedAt: domains.verifiedAt,
+      resendDomainId: domains.resendDomainId,
+      resendVerifiedAt: domains.resendVerifiedAt,
+      createdAt: domains.createdAt,
+      mailboxCount: count(mailboxes.id),
+    })
+    .from(domains)
+    .leftJoin(mailboxes, eq(mailboxes.domainId, domains.id))
+    .where(eq(domains.id, domainId))
+    .groupBy(domains.id)
+    .limit(1);
+  if (!row) return null;
+  return {
+    id: row.id,
+    domain: row.domain,
+    verifiedAt: row.verifiedAt?.getTime() ?? null,
+    resendDomainId: row.resendDomainId,
+    resendVerifiedAt: row.resendVerifiedAt?.getTime() ?? null,
+    createdAt: row.createdAt.getTime(),
+    mailboxCount: Number(row.mailboxCount ?? 0),
+  };
+}
+
+export async function setDomainResend(domainId: string, patch: DomainResendUpdate): Promise<void> {
+  const update: Record<string, unknown> = {};
+  if (patch.resendDomainId !== undefined) update.resendDomainId = patch.resendDomainId;
+  if (patch.resendVerifiedAt !== undefined) update.resendVerifiedAt = patch.resendVerifiedAt;
+  if (Object.keys(update).length === 0) return;
+  const db = await getDb();
+  await db.update(domains).set(update).where(eq(domains.id, domainId)).run();
 }
 
 export type AddDomainResult =

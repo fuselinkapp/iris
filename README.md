@@ -68,7 +68,7 @@ Hit **Compose** in the sidebar (or visit `/compose`), pick a From mailbox, type 
 
 Reply lives inside the reader pane — open a thread in Grandma, click **Reply**, type, hit Send. Replies thread with the original via `In-Reply-To` headers, so when the recipient replies *back* via real inbound, it merges into the same thread.
 
-Outbound currently runs in **sandbox mode**: recipients see `onboarding@resend.dev` as the From address; their replies route back to your real mailbox via the `Reply-To` header. Real per-domain From requires verifying each domain at Resend (a separate DKIM dance from Cloudflare Email Routing). That's a future phase.
+By default a domain sends in **sandbox mode** (`onboarding@resend.dev` From, your real address as Reply-To). To send from `hello@yourdomain.com` for real, open `/settings/domains`, click **Set up sending** on the domain, paste the new DKIM TXT record into your DNS, and click **Check verification** when it's propagated. Once the badge flips to "Sending: ready", composing from a mailbox on that domain uses the real From — the sandbox notice in compose disappears for verified domains.
 
 ## Production deploy
 

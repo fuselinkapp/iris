@@ -17,6 +17,8 @@ export const domains = sqliteTable(
     domain: text('domain').notNull(),
     verifiedAt: epoch('verified_at'),
     dkimStatus: text('dkim_status').notNull().default('pending'),
+    resendDomainId: text('resend_domain_id'),
+    resendVerifiedAt: epoch('resend_verified_at'),
     createdAt: epoch('created_at').notNull().default(sql`(unixepoch() * 1000)`),
   },
   (t) => ({

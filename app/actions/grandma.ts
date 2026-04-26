@@ -36,11 +36,13 @@ export async function markThreadRead(threadId: string): Promise<{ updated: numbe
   return markThreadReadQuery(threadId);
 }
 
-export type SendableMailbox = { id: string; address: string };
+export type SendableMailbox = { id: string; address: string; resendVerified: boolean };
 
 // Lightweight mailbox list for the compose dropdown — strips the unread-count
-// join `getGrandmaData` does. The compose page doesn't need it.
+// join `getGrandmaData` does. The compose page doesn't need it. Includes the
+// per-domain Resend verified flag so the form can hide the sandbox notice
+// when the active From mailbox can send for real.
 export async function getMailboxesForSend(): Promise<SendableMailbox[]> {
   const all = await listMailboxes();
-  return all.map((m) => ({ id: m.id, address: m.address }));
+  return all.map((m) => ({ id: m.id, address: m.address, resendVerified: m.resendVerified }));
 }

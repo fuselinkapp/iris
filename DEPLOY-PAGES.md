@@ -33,7 +33,7 @@ pnpm exec wrangler pages secret put RESEND_API_KEY --project-name iris-dashboard
 pnpm exec wrangler pages secret put IRIS_INGEST_TOKEN --project-name iris-dashboard
 ```
 
-`RESEND_API_KEY` enables real outbound (otherwise compose runs in dry-run mode). `IRIS_INGEST_TOKEN` protects the `/api/ingest` HTTP fallback endpoint.
+`RESEND_API_KEY` enables outbound (otherwise compose runs in dry-run mode). With the key set, sends initially use Resend's sandbox From (`onboarding@resend.dev`); to send from your real domain addresses, open `/settings/domains` after deploy and click **Set up sending** per domain — Iris will register the domain with Resend, surface the DKIM TXT record, and flip the per-domain badge to "Sending: ready" once verification propagates. `IRIS_INGEST_TOKEN` protects the `/api/ingest` HTTP fallback endpoint.
 
 ### 4. Bind D1 to the Pages project
 
